@@ -45,7 +45,7 @@ class CreateBallTree(Scene):
             centroid = points.mean(axis=0)
             radius = max(np.linalg.norm(centroid-points, axis=1))
             circle = Circle(radius=radius, arc_center=centroid, color=WHITE)
-            anims.append(FadeIn(circle))
+            anims.append(GrowFromCenter(circle))
 
             # APPROXIMATE DIMENSION OF GREATEST SPREAD
 
@@ -83,21 +83,55 @@ class CreateBallTree(Scene):
             angle = get_angle(A, B)
             A = circle.point_at_angle(angle)
             B = circle.point_at_angle(angle+PI)
-            line2 = Line(B, A)
-            # THIS LINE RIGHT HERE
-            anims.append(ReplacementTransform(line, line2))
+            anims.append(line.animate.put_start_and_end_on(B, A))
 
             # FIND MEDIAN POINT ALONG LINE
             diff = A-B
-            unit_vector = np.array([diff / np.linalg.norm(diff)])
-            print(unit_vector.shape, points.shape)
-            projected = np.inner(points, unit_vector) * unit_vector
+            unit_vector = np.array(diff / np.linalg.norm(diff))
+            projected = [np.dot(p, unit_vector)*unit_vector for p in points-centroid]
+            projected = np.array(projected)+centroid
+
+            projection = []
+            for point, proj in zip(points, projected):
+                line = Line(point, proj)
+                projection.append(Succession(Create(line), FadeOut(line)))
+            projected_dots = {tuple(p): Dot(p) for p in projected}
+            projection += [GrowFromCenter(d) for d in projected_dots.values()]
+            anims.append(AnimationGroup(*projection))
+
+            # Working in centroid-space for a second...
+            projected -= centroid
+            furthest = projected[np.argmax(np.linalg.norm(projected, axis=1))]
+            #anims.append(projected_dots[tuple(furthest+centroid)].animate.scale(2))
+            # https://stackoverflow.com/a/40984689
+            projected = projected[np.argsort(np.linalg.norm(furthest-projected,
+                                                            axis=1))]
+            #anims.append(projected_dots[tuple(projected[-1]+centroid)].animate.scale(2))
+            projected += centroid
+
+            def find_median(projected):
+                if len(projected) == 1:
+                    anims.append(Flash(projected_dots[tuple(projected[0])]))
+                    return projected[0]
+                elif len(projected) == 2:
+                    a = Flash(projected_dots[tuple(projected[0])])
+                    b = Indicate(projected_dots[tuple(projected[1])])
+                    anims.append(AnimationGroup(a, b))
+                    return projected[0]
+                else:
+                    a = Indicate(projected_dots[tuple(projected[0])])
+                    b = Indicate(projected_dots[tuple(projected[-1])])
+                    anims.append(AnimationGroup(a, b))
+                    return find_median(projected[1:-1])
+            median = find_median(projected)
 
             # DIVIDE POINTS BY WHICH SIDE OF MEDIAN
 
             # RECURSE FOR EACH SIDE?
 
-            return None, Succession(*anims)
+            return None, anims
 
-        self.play(create_ball_tree(points)[1])
+        _, anims = create_ball_tree(points)
+        for anim in anims:
+            self.play(anim)
         self.wait()
