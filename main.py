@@ -1,6 +1,6 @@
 # Timothy Jesionowski
 NUM_POINTS=15
-SEED=0
+SEED=1
 
 from manim import *
 import numpy as np
@@ -76,16 +76,16 @@ def find_spreadline(points, anims, circle, ):
     # Find the furthest point from that
     dists = np.linalg.norm(point-points, axis=1)
     A = points[np.argmax(dists)]
-    anims.append(ShowPassingFlash(Line(point, A)))
+    anims.append(ShowPassingFlash(Line(point, A), run_time=0.5))
 
     # Find the furthest point from that
     dists = np.linalg.norm(A-points, axis=1)
     B = points[np.argmax(dists)]
-    anims.append(ShowPassingFlash(Line(A, B)))
+    anims.append(ShowPassingFlash(Line(A, B), run_time=0.5))
 
     # This line is a pretty good approximation of the line of greatest spread.
     line = Line(B, A)
-    anims.append(Create(line))
+    anims.append(Create(line, run_time=0.5))
 
     # Transform that line such that it intersects the centroid
     # and spans the bounding circle.
@@ -167,7 +167,7 @@ def find_median(points, anims, centroid, spreadAngle):
             search_anims.append(AnimationGroup(a, b))
             return recurse_points(projected[1:-1])
     median = recurse_points(projected)
-    anims.append(AnimationGroup(*search_anims, lag_ratio=0.33))
+    anims.append(AnimationGroup(*search_anims, lag_ratio=0.5))
 
     median_index = list(map(tuple, projected)).index(tuple(median))
     median_index = min(len(projected)-1, median_index+1)
@@ -204,17 +204,28 @@ def bisect_points(anims, left_points, right_points, median, spreadAngle, radius,
 
     return line
 
+class Node:
+    pass
+
 def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
+    node = Node()
     if points.shape[0] == 1:
-        return
+        node.centroid = points[0]
+        node.radius = 0
+        return node, anims
 
     middle_color = interpolate_color(left_color, right_color, 0.5)
 
     circle, centroid, radius = find_bounds(points, anims, middle_color)
-
+    node.centroid = centroid
+    node.radius = radius
 
     if points.shape[0] < 3:
-        return
+        ag = AnimationGroup(Create(Line(points[0], centroid)),
+                            Create(Line(points[1], centroid)),
+                            run_time=0.5)
+        anims.append(ag)
+        return node, anims
 
     spreadLine, spreadAngle = find_spreadline(points, anims, circle)
 
@@ -233,7 +244,14 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
                                 *shrinkdots))
 
     # RECURSE FOR EACH SIDE?
-    create_ball_tree(np.array(left), anims, left_color, middle_color)
-    create_ball_tree(np.array(right), anims, middle_color, right_color)
+    leftChild, _ = create_ball_tree(np.array(left), anims, left_color,
+                                    middle_color)
+    anims.append(Create(Line(centroid, leftChild.centroid), run_time=0.5))
+    node.left = leftChild
 
-    return None, anims
+    rightChild, _ = create_ball_tree(np.array(right), anims,
+                                     middle_color, right_color)
+    anims.append(Create(Line(centroid, rightChild.centroid), run_time=0.5))
+    node.right = rightChild
+
+    return node, anims
