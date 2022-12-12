@@ -223,6 +223,7 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     if points.shape[0] < 3:
         ag = AnimationGroup(Create(Line(points[0], centroid)),
                             Create(Line(points[1], centroid)),
+                            GrowFromCenter(Dot(centroid, color=middle_color)),
                             run_time=0.5)
         anims.append(ag)
         return node, anims
@@ -253,5 +254,7 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
                                      middle_color, right_color)
     anims.append(Create(Line(centroid, rightChild.centroid), run_time=0.5))
     node.right = rightChild
+
+    anims.append(GrowFromCenter(Dot(centroid, color=middle_color)))
 
     return node, anims
