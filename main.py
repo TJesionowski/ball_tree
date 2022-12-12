@@ -221,8 +221,8 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     node.radius = radius
 
     if points.shape[0] < 3:
-        ag = AnimationGroup(Create(Line(points[0], centroid)),
-                            Create(Line(points[1], centroid)),
+        ag = AnimationGroup(Create(Arrow(points[0], centroid)),
+                            Create(Arrow(points[1], centroid)),
                             GrowFromCenter(Dot(centroid, color=middle_color)),
                             run_time=0.5)
         anims.append(ag)
@@ -247,12 +247,12 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     # RECURSE FOR EACH SIDE?
     leftChild, _ = create_ball_tree(np.array(left), anims, left_color,
                                     middle_color)
-    anims.append(Create(Line(leftChild.centroid, centroid), run_time=0.5))
+    anims.append(Create(Arrow(leftChild.centroid, centroid), run_time=0.5))
     node.left = leftChild
 
     rightChild, _ = create_ball_tree(np.array(right), anims,
                                      middle_color, right_color)
-    anims.append(Create(Line(rightChild.centroid, centroid), run_time=0.5))
+    anims.append(Create(Arrow(rightChild.centroid, centroid), run_time=0.5))
     node.right = rightChild
 
     anims.append(GrowFromCenter(Dot(centroid, color=middle_color)))
