@@ -247,12 +247,12 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     # RECURSE FOR EACH SIDE?
     leftChild, _ = create_ball_tree(np.array(left), anims, left_color,
                                     middle_color)
-    anims.append(Create(Line(centroid, leftChild.centroid), run_time=0.5))
+    anims.append(Create(Line(leftChild.centroid, centroid), run_time=0.5))
     node.left = leftChild
 
     rightChild, _ = create_ball_tree(np.array(right), anims,
                                      middle_color, right_color)
-    anims.append(Create(Line(centroid, rightChild.centroid), run_time=0.5))
+    anims.append(Create(Line(rightChild.centroid, centroid), run_time=0.5))
     node.right = rightChild
 
     anims.append(GrowFromCenter(Dot(centroid, color=middle_color)))
