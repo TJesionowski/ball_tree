@@ -1,8 +1,12 @@
+# Timothy Jesionowski
+NUM_POINTS=15
+SEED=0
+
 from manim import *
 import numpy as np
 
 # Seed chosen by unfair coinflip because I don't have dice handy.
-rng = np.random.default_rng(0)
+rng = np.random.default_rng(SEED)
 
 class CreateBallTree(Scene):
     def construct(self):
@@ -19,7 +23,7 @@ class CreateBallTree(Scene):
         cov /= np.linalg.norm(cov)
         points = rng.multivariate_normal([0,0,0],
                                          cov,
-                                         size=10)
+                                         size=NUM_POINTS)
 
         dots = {tuple(p): Dot(p, color=GREY, radius=0.05) for p in points}
         #self.play(Create(plane))
@@ -30,7 +34,7 @@ class CreateBallTree(Scene):
         _, anims = create_ball_tree(points)
         for anim in anims:
             self.play(anim)
-        self.wait()
+        self.wait(5.0)
 
 def get_dot(point):
     global dots
@@ -49,14 +53,15 @@ def unhighlight(points):
     return highlight(points, color=GREY, scale=0.8)
 
 
-def find_bounds(points, anims):
+def find_bounds(points, anims, bounding_color):
     # FIND BOUNDS/CENTROID OF POINTS
 
     # Todo: animate lines from points to centroid, centroid
     # fadin+transform to bound
     centroid = points.mean(axis=0)
     radius = max(np.linalg.norm(centroid-points, axis=1))
-    circle = Circle(radius=radius, arc_center=centroid, color=WHITE)
+    circle = Circle(radius=radius, arc_center=centroid,
+                    color=bounding_color, fill_opacity=0.25)
     anims.append(GrowFromCenter(circle))
 
     return circle, centroid, radius
@@ -133,8 +138,7 @@ def find_median(points, anims, centroid, spreadAngle):
     projection = []
     for point, proj in zip(points, projected):
         projection_line = Line(point, proj)
-        projection.append(Succession(Create(projection_line),
-                                     FadeOut(projection_line)))
+        projection.append(ShowPassingFlash(projection_line))
     projected_dots = {tuple(p): Dot(p) for p in projected}
     projection += [GrowFromCenter(d) for d in projected_dots.values()]
     anims.append(AnimationGroup(*projection))
@@ -147,21 +151,23 @@ def find_median(points, anims, centroid, spreadAngle):
                                                     axis=1))]
     projected += centroid
 
+    search_anims = []
     def recurse_points(projected):
         if len(projected) == 1:
-            anims.append(Flash(projected_dots[tuple(projected[0])]))
+            search_anims.append(Flash(projected_dots[tuple(projected[0])]))
             return projected[0]
         elif len(projected) == 2:
             a = Flash(projected_dots[tuple(projected[0])])
             b = Indicate(projected_dots[tuple(projected[1])])
-            anims.append(AnimationGroup(a, b))
+            search_anims.append(AnimationGroup(a, b))
             return projected[0]
         else:
             a = Indicate(projected_dots[tuple(projected[0])])
             b = Indicate(projected_dots[tuple(projected[-1])])
-            anims.append(AnimationGroup(a, b))
+            search_anims.append(AnimationGroup(a, b))
             return recurse_points(projected[1:-1])
     median = recurse_points(projected)
+    anims.append(AnimationGroup(*search_anims, lag_ratio=0.33))
 
     median_index = list(map(tuple, projected)).index(tuple(median))
     median_index = min(len(projected)-1, median_index+1)
@@ -182,14 +188,15 @@ def find_median(points, anims, centroid, spreadAngle):
 
     return median, left_points, right_points, list(projected_dots.values())
 
-def bisect_points(anims, left_points, right_points, median, spreadAngle, radius):
+def bisect_points(anims, left_points, right_points, median, spreadAngle, radius,
+                  left_color, right_color):
     unit_vector = np.array([np.cos(spreadAngle+(PI/2)),
                             np.sin(spreadAngle+(PI/2)), 0])
     vector = unit_vector*radius
     line = Line(median+vector, median-vector)
 
-    highlightL = highlight(left_points, color=BLUE)
-    highlightR = highlight(right_points, color=GREEN)
+    highlightL = highlight(left_points, color=left_color)
+    highlightR = highlight(right_points, color=right_color)
 
     anims.append(AnimationGroup(GrowFromCenter(line),
                                 highlightL,
@@ -197,11 +204,14 @@ def bisect_points(anims, left_points, right_points, median, spreadAngle, radius)
 
     return line
 
-def create_ball_tree(points, anims = []):
+def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     if points.shape[0] == 1:
         return
 
-    circle, centroid, radius = find_bounds(points, anims)
+    middle_color = interpolate_color(left_color, right_color, 0.5)
+
+    circle, centroid, radius = find_bounds(points, anims, middle_color)
+
 
     if points.shape[0] < 3:
         return
@@ -211,19 +221,19 @@ def create_ball_tree(points, anims = []):
     median, left, right, projected_dots = \
         find_median(points, anims, centroid, spreadAngle)
 
-    bisectionLine = bisect_points(anims, left, right,
-                                  median, spreadAngle, radius)
+    bisectionLine = bisect_points(anims, left, right, median,
+                                  spreadAngle, radius, left_color,
+                                  right_color)
     anims.append(Wait())
 
     shrinklines = [ShrinkToCenter(spreadLine),
                    ShrinkToCenter(bisectionLine)]
     shrinkdots = [ShrinkToCenter(dot) for dot in projected_dots]
     anims.append(AnimationGroup(*shrinklines,
-                                *shrinkdots,
-                                unhighlight(points)))
+                                *shrinkdots))
 
     # RECURSE FOR EACH SIDE?
-    create_ball_tree(np.array(left))
-    create_ball_tree(np.array(right))
+    create_ball_tree(np.array(left), anims, left_color, middle_color)
+    create_ball_tree(np.array(right), anims, middle_color, right_color)
 
     return None, anims
