@@ -2,20 +2,23 @@ from manim import *
 import numpy as np
 
 # Seed chosen by unfair coinflip because I don't have dice handy.
-rng = np.random.default_rng(1)
+rng = np.random.default_rng(0)
 
 class CreateBallTree(Scene):
     def construct(self):
         plane = NumberPlane()
 
-        # Generate 3d points then mask the 3rd dimension so it doesn't mess up our calculations
-        var = 2
-        points3 = rng.multivariate_normal([0,0,0],
-                                          var*np.identity(3),
-                                          size=21)
-        points = points3
-        points[:,-1] = 0
-        points = points
+        # Generate points in a normal distribution squished to the
+        # correct aspect ratio.
+        cov = np.array([
+            [16.0, 0.0, 0.0],
+            [0.0,  9.0, 0.0],
+            [0.0,  0.0, 0.0]
+        ])
+        cov /= np.linalg.norm(cov)
+        points = rng.multivariate_normal([0,0,0],
+                                         cov,
+                                         size=10)
 
         dots = {tuple(p): Dot(p, color=GREY, radius=0.05) for p in points}
         self.play(Create(plane))
@@ -79,16 +82,30 @@ class CreateBallTree(Scene):
 
                 unit_diff = diff / mag
                 cos = unit_diff[0]
-                return  np.arccos(cos)
+                sin = unit_diff[1]
+                if cos == 0 and sin == 1:
+                    return np.deg2rad(90)
+                elif cos == 0 and sin == -1:
+                    return np.deg2rad(-90)
+                elif cos != 0:
+                    return  np.arctan(sin / cos)
+                else:
+                    print(sin, cos)
+                    raise RuntimeError()
             assert np.rad2deg(get_angle(ORIGIN[:-1], np.array([1,0]))) == 0
             assert np.rad2deg(get_angle(ORIGIN[:-1], np.array([1,1]))) == 45
             assert np.rad2deg(get_angle(ORIGIN[:-1], np.array([0,1]))) == 90
-            assert np.rad2deg(get_angle(ORIGIN[:-1], np.array([-1,0]))) == 180
-            assert np.rad2deg(get_angle(ORIGIN[:-1], np.array([0,-1]))) == 90
 
             angle = get_angle(A, B)
-            A = circle.point_at_angle(angle)
-            B = circle.point_at_angle(angle+PI)
+            a = circle.point_at_angle(angle)
+            b = circle.point_at_angle(angle+PI)
+            if np.linalg.norm(A-a) > np.linalg.norm(A-b):
+                A=a
+                B=b
+            else:
+                A=b
+                B=a
+
             anims.append(line.animate.put_start_and_end_on(A, B))
 
             # FIND MEDIAN POINT ALONG LINE
@@ -99,20 +116,19 @@ class CreateBallTree(Scene):
 
             projection = []
             for point, proj in zip(points, projected):
-                line = Line(point, proj)
-                projection.append(Succession(Create(line), FadeOut(line)))
+                projection_line = Line(point, proj)
+                projection.append(Succession(Create(projection_line),
+                                             FadeOut(projection_line)))
             projected_dots = {tuple(p): Dot(p) for p in projected}
             projection += [GrowFromCenter(d) for d in projected_dots.values()]
-            #anims.append(AnimationGroup(*projection))
+            anims.append(AnimationGroup(*projection))
 
             # Working in centroid-space for a second...
             projected -= centroid
             furthest = projected[np.argmax(np.linalg.norm(projected, axis=1))]
-            #anims.append(projected_dots[tuple(furthest+centroid)].animate.scale(2))
             # https://stackoverflow.com/a/40984689
             projected = projected[np.argsort(np.linalg.norm(furthest-projected,
                                                             axis=1))]
-            #anims.append(projected_dots[tuple(projected[-1]+centroid)].animate.scale(2))
             projected += centroid
 
             def find_median(projected):
@@ -129,7 +145,16 @@ class CreateBallTree(Scene):
                     b = Indicate(projected_dots[tuple(projected[-1])])
                     anims.append(AnimationGroup(a, b))
                     return find_median(projected[1:-1])
-            #median = find_median(projected)
+            median = find_median(projected)
+
+            # This SHOULD work but doesn't?
+            rotate_line = line.animate\
+                              .rotate(90,
+                                      about_point=centroid)
+            shift_line = line.animate\
+                             .move_to(median)
+            anims.append(AnimationGroup(rotate_line, shift_line))
+            print(locals().keys())
 
             # DIVIDE POINTS BY WHICH SIDE OF MEDIAN
 
