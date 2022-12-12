@@ -61,7 +61,7 @@ def find_bounds(points, anims, bounding_color):
     centroid = points.mean(axis=0)
     radius = max(np.linalg.norm(centroid-points, axis=1))
     circle = Circle(radius=radius, arc_center=centroid,
-                    color=bounding_color, fill_opacity=0.25)
+                    color=bounding_color, fill_opacity=0.1)
     anims.append(GrowFromCenter(circle))
 
     return circle, centroid, radius
@@ -221,9 +221,10 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     node.radius = radius
 
     if points.shape[0] < 3:
-        ag = AnimationGroup(Create(Arrow(centroid, points[0], buff=0)),
-                            Create(Arrow(centroid, points[1], buff=0)),
-                            #GrowFromCenter(Dot(centroid, color=middle_color)),
+        ag = AnimationGroup(Create(Arrow(centroid, points[0], buff=0,
+                                         color=middle_color)),
+                            Create(Arrow(centroid, points[1], buff=0,
+                                         color=middle_color)),
                             run_time=0.5)
         anims.append(ag)
         return node, anims
@@ -247,12 +248,14 @@ def create_ball_tree(points, anims = [], left_color = BLUE, right_color=ORANGE):
     # RECURSE FOR EACH SIDE?
     leftChild, _ = create_ball_tree(np.array(left), anims, left_color,
                                     middle_color)
-    anims.append(Create(Arrow(centroid, leftChild.centroid, buff=0), run_time=0.5))
+    anims.append(Create(Arrow(centroid, leftChild.centroid, buff=0,
+                              color=middle_color), run_time=0.5))
     node.left = leftChild
 
     rightChild, _ = create_ball_tree(np.array(right), anims,
                                      middle_color, right_color)
-    anims.append(Create(Arrow(centroid, rightChild.centroid, buff=0), run_time=0.5))
+    anims.append(Create(Arrow(centroid, rightChild.centroid, buff=0,
+                              color=middle_color), run_time=0.5))
     node.right = rightChild
 
     #anims.append(GrowFromCenter(Dot(centroid, color=middle_color)))
