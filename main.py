@@ -164,13 +164,15 @@ def find_median(points, anims, centroid, spreadAngle):
     median = recurse_points(projected)
 
     median_index = list(map(tuple, projected)).index(tuple(median))
+    median_index = min(len(projected)-1, median_index+1)
     left_projected = set(map(tuple, projected[:median_index]))
     right_projected = set(map(tuple, projected[median_index:]))
 
     left_points = []
     right_points = []
     for point in points:
-        projected_point = tuple((np.dot(point-centroid, unit_vector)*unit_vector)+centroid)
+        projected_point = tuple((np.dot(point-centroid, unit_vector)\
+                                 *unit_vector)+centroid)
         if projected_point in left_projected:
             left_points.append(point)
         elif projected_point in right_projected:
@@ -211,6 +213,7 @@ def create_ball_tree(points, anims = []):
 
     bisectionLine = bisect_points(anims, left, right,
                                   median, spreadAngle, radius)
+    anims.append(Wait())
 
     shrinklines = [ShrinkToCenter(spreadLine),
                    ShrinkToCenter(bisectionLine)]
