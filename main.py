@@ -27,18 +27,6 @@ class CreateBallTree(Scene):
         self.add(plane)
         self.add(*dots.values())
 
-        def highlight(points, color=BLUE, scale=2):
-            highlights = []
-            for point in points:
-                dot = get_dot(point)
-                anim = dot.animate.scale(scale).set_color(color)
-
-                highlights.append(anim)
-            return AnimationGroup(*highlights)
-
-        def unhighlight(points):
-            return highlight(points, color=GREY, scale=0.5)
-
         _, anims = create_ball_tree(points)
         for anim in anims:
             self.play(anim)
@@ -47,6 +35,19 @@ class CreateBallTree(Scene):
 def get_dot(point):
     global dots
     return dots[tuple(point)]
+
+def highlight(points, color=BLUE, scale=2):
+    highlights = []
+    for point in points:
+        dot = get_dot(point)
+        anim = dot.animate.scale(scale).set_color(color)
+
+        highlights.append(anim)
+    return AnimationGroup(*highlights)
+
+def unhighlight(points):
+    return highlight(points, color=GREY, scale=0.8)
+
 
 def find_bounds(points, anims):
     # FIND BOUNDS/CENTROID OF POINTS
@@ -134,8 +135,8 @@ def find_median(points, anims, centroid, spreadAngle):
         projection_line = Line(point, proj)
         projection.append(Succession(Create(projection_line),
                                      FadeOut(projection_line)))
-        projected_dots = {tuple(p): Dot(p) for p in projected}
-        projection += [GrowFromCenter(d) for d in projected_dots.values()]
+    projected_dots = {tuple(p): Dot(p) for p in projected}
+    projection += [GrowFromCenter(d) for d in projected_dots.values()]
     anims.append(AnimationGroup(*projection))
 
     # Working in centroid-space for a second...
@@ -162,27 +163,64 @@ def find_median(points, anims, centroid, spreadAngle):
             return recurse_points(projected[1:-1])
     median = recurse_points(projected)
 
-    return median
+    median_index = list(map(tuple, projected)).index(tuple(median))
+    left_projected = set(map(tuple, projected[:median_index]))
+    right_projected = set(map(tuple, projected[median_index:]))
 
-def create_ball_tree(points):
-    anims = []
+    left_points = []
+    right_points = []
+    for point in points:
+        projected_point = tuple((np.dot(point-centroid, unit_vector)*unit_vector)+centroid)
+        if projected_point in left_projected:
+            left_points.append(point)
+        elif projected_point in right_projected:
+            right_points.append(point)
+        else:
+            assert 0, "Projected point not found!"
+
+    return median, left_points, right_points, list(projected_dots.values())
+
+def bisect_points(anims, left_points, right_points, median, spreadAngle, radius):
+    unit_vector = np.array([np.cos(spreadAngle+(PI/2)),
+                            np.sin(spreadAngle+(PI/2)), 0])
+    vector = unit_vector*radius
+    line = Line(median+vector, median-vector)
+
+    highlightL = highlight(left_points, color=BLUE)
+    highlightR = highlight(right_points, color=GREEN)
+
+    anims.append(AnimationGroup(GrowFromCenter(line),
+                                highlightL,
+                                highlightR))
+
+    return line
+
+def create_ball_tree(points, anims = []):
+    if points.shape[0] == 1:
+        return
 
     circle, centroid, radius = find_bounds(points, anims)
 
+    if points.shape[0] < 3:
+        return
+
     spreadLine, spreadAngle = find_spreadline(points, anims, circle)
 
-    median = find_median(points, anims, centroid, spreadAngle)
+    median, left, right, projected_dots = \
+        find_median(points, anims, centroid, spreadAngle)
 
-    # This SHOULD work but doesn't?
-    # rotate_line = line.animate\
-    #                   .rotate(90,
-    #                           about_point=centroid)
-    # shift_line = line.animate\
-    #                  .move_to(median)
-    # anims.append(AnimationGroup(rotate_line, shift_line))
+    bisectionLine = bisect_points(anims, left, right,
+                                  median, spreadAngle, radius)
 
-    # DIVIDE POINTS BY WHICH SIDE OF MEDIAN
+    shrinklines = [ShrinkToCenter(spreadLine),
+                   ShrinkToCenter(bisectionLine)]
+    shrinkdots = [ShrinkToCenter(dot) for dot in projected_dots]
+    anims.append(AnimationGroup(*shrinklines,
+                                *shrinkdots,
+                                unhighlight(points)))
 
     # RECURSE FOR EACH SIDE?
+    create_ball_tree(np.array(left))
+    create_ball_tree(np.array(right))
 
     return None, anims
